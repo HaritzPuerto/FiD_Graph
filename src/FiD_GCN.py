@@ -60,12 +60,12 @@ class FiDT5(transformers.T5ForConditionalGeneration):
         )
 
     # We need to resize the inputs here, as the generate method expect 2D tensors
-    def generate(self, input_ids, attention_mask, graph, max_length):
+    def generate(self, input_ids, attention_mask, graphs, max_length):
         self.encoder.n_passages = input_ids.size(1)
         return super().generate(
             input_ids=input_ids.view(input_ids.size(0), -1),
             attention_mask=attention_mask.view(attention_mask.size(0), -1),
-            graph=graph,
+            graphs=graphs,
             max_length=max_length
         )
 
