@@ -8,6 +8,8 @@ import torch
 import random
 import json
 import numpy as np
+from tqdm import tqdm
+from .graph_creation import GraphBuilder
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self,
@@ -22,6 +24,16 @@ class Dataset(torch.utils.data.Dataset):
         self.title_prefix = title_prefix
         self.passage_prefix = passage_prefix
         self.sort_data()
+        self.graph_builder = GraphBuilder()
+        
+        self.list_graphs = []
+        self.input_ids = []
+        self.attention_masks = []
+        for example in tqdm(self.data):
+            (g, input_ids, attention_masks) = self.graph_builder.create_graph(example['ctxs'])
+            self.list_graphs.append(g)
+            self.input_ids.append(input_ids)
+            self.attention_masks.append(attention_masks)
 
     def __len__(self):
         return len(self.data)
@@ -58,7 +70,10 @@ class Dataset(torch.utils.data.Dataset):
             'question' : question,
             'target' : target,
             'passages' : passages,
-            'scores' : scores
+            'scores' : scores,
+            'graph' : self.list_graphs[index],
+            'input_ids' : self.input_ids[index],
+            'attention_masks' : self.attention_masks[index]
         }
 
     def sort_data(self):
@@ -118,6 +133,33 @@ class Collator(object):
                                                      self.text_maxlength)
 
         return (index, target_ids, target_mask, passage_ids, passage_masks)
+    
+class GraphCollator(object):
+    def __init__(self, text_maxlength, tokenizer, answer_maxlength=20):
+        self.tokenizer = tokenizer
+        self.text_maxlength = text_maxlength
+        self.answer_maxlength = answer_maxlength
+        self.graph_builder = GraphBuilder()
+
+    def __call__(self, batch):
+        assert(batch[0]['target'] != None)
+        index = torch.tensor([ex['index'] for ex in batch])
+        target = [ex['target'] for ex in batch]
+        target = self.tokenizer.batch_encode_plus(
+            target,
+            max_length=self.answer_maxlength if self.answer_maxlength > 0 else None,
+            pad_to_max_length=True,
+            return_tensors='pt',
+            truncation=True if self.answer_maxlength > 0 else False,
+        )
+        target_ids = target["input_ids"]
+        target_mask = target["attention_mask"].bool()
+        target_ids = target_ids.masked_fill(~target_mask, -100)       
+        input_ids = batch[0]['input_ids'].unsqueeze(0)
+        attention_mask = batch[0]['attention_masks'].unsqueeze(0)
+        graph = batch[0]['graph']
+        
+        return (index, target_ids, target_mask,input_ids, attention_mask, graph)
 
 def load_data(data_path=None, global_rank=-1, world_size=-1):
     assert data_path
