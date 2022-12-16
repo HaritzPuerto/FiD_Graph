@@ -26,14 +26,14 @@ class Dataset(torch.utils.data.Dataset):
         self.sort_data()
         self.graph_builder = GraphBuilder()
         
-        self.list_graphs = []
-        self.input_ids = []
-        self.attention_masks = []
-        for example in tqdm(self.data):
-            (g, input_ids, attention_masks) = self.graph_builder.create_graph(example['ctxs'])
-            self.list_graphs.append(g)
-            self.input_ids.append(input_ids)
-            self.attention_masks.append(attention_masks)
+        # self.list_graphs = []
+        # self.input_ids = []
+        # self.attention_masks = []
+        # for example in tqdm(self.data):
+        #     (g, input_ids, attention_masks) = self.graph_builder.create_graph(example['ctxs'])
+        #     self.list_graphs.append(g)
+        #     self.input_ids.append(input_ids)
+        #     self.attention_masks.append(attention_masks)
 
     def __len__(self):
         return len(self.data)
@@ -64,6 +64,7 @@ class Dataset(torch.utils.data.Dataset):
         else:
             passages, scores = None, None
 
+        (g, input_ids, attention_masks) = self.graph_builder.create_graph(example['ctxs'])
 
         return {
             'index' : index,
@@ -71,9 +72,9 @@ class Dataset(torch.utils.data.Dataset):
             'target' : target,
             'passages' : passages,
             'scores' : scores,
-            'graph' : self.list_graphs[index],
-            'input_ids' : self.input_ids[index],
-            'attention_masks' : self.attention_masks[index]
+            'graph' : g,
+            'input_ids' : input_ids,
+            'attention_masks' : attention_masks
         }
 
     def sort_data(self):
