@@ -45,7 +45,7 @@ class FiDT5(transformers.T5ForConditionalGeneration):
     # because the T5 forward method uses the input tensors to infer
     # dimensions used in the decoder.
     # EncoderWrapper resizes the inputs as (B * N) x L.
-    def forward(self, input_ids=None, attention_mask=None, graphs=None, **kwargs):
+    def forward(self, input_ids=None, attention_mask=None, graph=None, **kwargs):
         if input_ids != None:
             # inputs might have already be resized in the generate method
             if input_ids.dim() == 3:
@@ -56,17 +56,17 @@ class FiDT5(transformers.T5ForConditionalGeneration):
         return super().forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            graphs=graphs,
+            graph=graph,
             **kwargs
         )
 
     # We need to resize the inputs here, as the generate method expect 2D tensors
-    def generate(self, input_ids, attention_mask, graphs, max_length):
+    def generate(self, input_ids, attention_mask, graph, max_length):
         self.encoder.n_passages = input_ids.size(1)
         return super().generate(
             input_ids=input_ids.view(input_ids.size(0), -1),
             attention_mask=attention_mask.view(attention_mask.size(0), -1),
-            graphs=graphs,
+            graph=graph,
             max_length=max_length
         )
 
@@ -151,11 +151,10 @@ class EncoderWrapper(torch.nn.Module):
 
         self.encoder = encoder
         apply_checkpoint_wrapper(self.encoder, use_checkpoint)
-        # self.gcn = GCN(self.config.d_model, self.config.d_model)
-        self.gcn = GCN(512, 512)
+        self.gcn = GCN(encoder.config.d_model, encoder.config.d_model)
         
         
-    def forward(self, input_ids=None, attention_mask=None, graphs=None, **kwargs,):
+    def forward(self, input_ids=None, attention_mask=None, graph=None, **kwargs,):
         # total_length = n_passages * passage_length
         bsz, total_length = input_ids.shape
         passage_length = total_length // self.n_passages
@@ -164,18 +163,15 @@ class EncoderWrapper(torch.nn.Module):
         outputs = self.encoder(input_ids, attention_mask, **kwargs)
         outputs = (outputs[0].view(bsz, self.n_passages*passage_length, -1), ) + outputs[1:]
         original_shape = outputs[0].shape
-        self.create_node_embeddings(graphs, outputs[0].view(-1, outputs[0].shape[-1]))
+        self.create_node_embeddings(graph, outputs[0].view(-1, outputs[0].shape[-1]))
         # to homogeneous graph
-        hg = dgl.to_homogeneous(graphs, ndata=['h'])
+        hg = dgl.to_homogeneous(graph, ndata=['h'])
         hg = dgl.add_self_loop(hg)
         # graph convolution
         node_emb = self.gcn(hg, hg.ndata['h'])
         # getting the token embeddings from the graph
-        token_node_idx = (hg.ndata[dgl.NTYPE] == graphs.ntypes.index('token')).tolist()
-        print(len(token_node_idx))
-        print(original_shape)
+        token_node_idx = (hg.ndata[dgl.NTYPE] == graph.ntypes.index('token')).tolist()
         token_emb = node_emb[token_node_idx]
-        print(token_emb.shape)
         outputs = (token_emb.view(original_shape), ) + outputs[1:]
         return outputs
     

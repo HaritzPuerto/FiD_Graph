@@ -1035,7 +1035,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         head_mask=None,
         output_attentions=None,
         output_hidden_states=None,
-        graphs=None,
+        graph=None,
         **kwargs
     ):
         r"""
@@ -1105,7 +1105,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
                 head_mask=head_mask,
                 output_attentions=output_attentions,
                 output_hidden_states=output_hidden_states,
-                graphs=graphs,
+                graph=graph,
             )
 
         hidden_states = encoder_outputs[0]
