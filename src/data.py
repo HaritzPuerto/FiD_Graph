@@ -23,7 +23,7 @@ class Dataset(torch.utils.data.Dataset):
         self.question_prefix = question_prefix
         self.title_prefix = title_prefix
         self.passage_prefix = passage_prefix
-        self.sort_data()
+        # self.sort_data()
         self.graph_builder = GraphBuilder()
         
         # self.list_graphs = []
@@ -56,22 +56,22 @@ class Dataset(torch.utils.data.Dataset):
             f = self.title_prefix + " {} " + self.passage_prefix + " {}"
             contexts = example['ctxs'][:self.n_context]
             passages = [f.format(c['title'], c['text']) for c in contexts]
-            scores = [float(c['score']) for c in contexts]
-            scores = torch.tensor(scores)
+            # scores = [float(c['score']) for c in contexts]
+            # scores = torch.tensor(scores)
             # TODO(egrave): do we want to keep this?
             if len(contexts) == 0:
                 contexts = [question]
         else:
             passages, scores = None, None
 
-        (g, input_ids, attention_masks) = self.graph_builder.create_graph(example['ctxs'])
+        (g, input_ids, attention_masks) = self.graph_builder.create_graph(example['ctxs'][:self.n_context])
 
         return {
             'index' : index,
             'question' : question,
             'target' : target,
             'passages' : passages,
-            'scores' : scores,
+            # 'scores' : scores,
             'graph' : g,
             'input_ids' : input_ids,
             'attention_masks' : attention_masks
