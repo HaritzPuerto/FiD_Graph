@@ -185,7 +185,7 @@ class GraphBuilder():
     def add_edge(self, edges, etype, u, v):
         if etype not in edges:
             edges[etype] = []
-            edges[etype].append((u, v))
+        edges[etype].append((u, v))
     
     # parse html DOM tree
     def recursive_dom_tree_parsing(self, sent_idx, section, list_parent_node, list_parent_lines, prev_line, nodes, edges, sent_idx2node):
@@ -300,16 +300,18 @@ class GraphBuilder():
         else:
             raise ValueError("No parent for this node")
         
-if __name__ == "__main__":
-    graph_builder = GraphBuilder()
-    with open('/home/puerto/projects/FiD/data/fid_format/train.json') as f:
-        train_data = json.load(f)
-        
-    list_g = []
-    list_input_ids = []
-    list_attention_masks = []
-    for i in trange(len(train_data), desc="Creating graph", leave=True):
-        (g, input_ids, attention_mask) = graph_builder.create_graph(train_data[i]['ctxs'])
-        list_g.append(g)
-        list_input_ids.append(input_ids)
-        list_attention_masks.append(attention_mask)
+# if __name__ == "__main__":
+#     graph_builder = GraphBuilder()
+#     with open('/home/puerto/projects/FiD/data/fid_format/train.json') as f:
+#         train_data = json.load(f)
+    
+#     train_data = train_data[2170:2171]
+#     train_data[0]['ctxs'] = train_data[0]['ctxs'][:11]
+#     list_g = []
+#     list_input_ids = []
+#     list_attention_masks = []
+#     for i in trange(len(train_data), desc="Creating graph", leave=True):
+#         (g, input_ids, attention_mask) = graph_builder.create_graph(train_data[i]['ctxs'])
+#         list_g.append(g)
+#         list_input_ids.append(input_ids)
+#         list_attention_masks.append(attention_mask)
