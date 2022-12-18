@@ -41,7 +41,7 @@ class GraphBuilder():
                 # The tokenizer should not add a pad token at the end of the sequence. It should add the end of sequence token. (i.e., 1 = </s>)
             
             txt_splitted = section['text'].split("context: \\n")
-            if len(txt_splitted) > 1:
+            if len(txt_splitted) > 1 and txt_splitted[1] != '':
                 # if there is context
                 list_html_lines_ctx = txt_splitted[1].split('\\n')
             else:
@@ -71,27 +71,38 @@ class GraphBuilder():
             list_idx_nodes = [0]
             list_idx_nodes.extend((input_ids == self.id_slash_n).nonzero(as_tuple=True)[0].tolist())
             list_pads_occurences = (input_ids == self.id_pad).nonzero(as_tuple=True)[0].tolist()
-                
+            list_pads_and_sep = (input_ids == self.id_pad).nonzero(as_tuple=True)[0].tolist()
+            list_pads_and_sep.extend((input_ids == self.id_sep).nonzero(as_tuple=True)[0].tolist())  
             if len(sent_idx2node) > 0: # if there is at least 1 sentence in the section
-                for i in range(len(list_idx_nodes)-1):
+                i = 0
+                if len(list_idx_nodes) > 1:
+                    for i in range(len(list_idx_nodes)-1):
+                        etype = sent_idx2node[i]['node_type'] + "_token"
+                        if etype not in edges:
+                            edges[etype] = []
+                        for token_idx in range(list_idx_nodes[i],list_idx_nodes[i+1]):
+                            t = token_idx + sec_idx*self.max_length # to add the offset
+                            edges[etype].append((sent_idx2node[i]['node_idx'], t))
+                            nodes['token'] += 1
+                    # add token edges to the last node
+                    i = i + 1
                     etype = sent_idx2node[i]['node_type'] + "_token"
                     if etype not in edges:
                         edges[etype] = []
-                    for token_idx in range(list_idx_nodes[i],list_idx_nodes[i+1]):
+                    for token_idx in range(list_idx_nodes[-1], list_pads_and_sep[0]):
                         t = token_idx + sec_idx*self.max_length # to add the offset
                         edges[etype].append((sent_idx2node[i]['node_idx'], t))
                         nodes['token'] += 1
-                # add edges to the last node
-                list_pads_and_sep = (input_ids == self.id_pad).nonzero(as_tuple=True)[0].tolist()
-                list_pads_and_sep.extend((input_ids == self.id_sep).nonzero(as_tuple=True)[0].tolist())
-                i = i + 1
-                etype = sent_idx2node[i]['node_type'] + "_token"
-                if etype not in edges:
-                    edges[etype] = []
-                for token_idx in range(list_idx_nodes[-1], list_pads_and_sep[0]):
-                    t = token_idx + sec_idx*self.max_length # to add the offset
-                    edges[etype].append((sent_idx2node[i]['node_idx'], t))
-                    nodes['token'] += 1
+                else:
+                    # if there is no sentence in the section, only the title. eg: 'title: <h1> Leave </h1> context:'
+                    i = 0
+                    etype = sent_idx2node[i]['node_type'] + "_token"
+                    if etype not in edges:
+                        edges[etype] = []
+                    for token_idx in range(list_idx_nodes[-1], list_pads_and_sep[0]):
+                        t = token_idx + sec_idx*self.max_length # to add the offset
+                        edges[etype].append((sent_idx2node[i]['node_idx'], t))
+                        nodes['token'] += 1
             # add PAD tokens 
             # This will simplify the combination of section embeddings into the graph.
             # PAD nodes are connected to the root nodes (eg: h1)
