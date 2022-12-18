@@ -60,8 +60,12 @@ def get_idx_lines(encodings, sent_sep_encoding):
     return list_sent_idx
 
 def truncate_section(tokenizer, section, max_length, sent_sep_encoding):
-    ctx = " \\n ".join(section[1:])
-    txt = f"title: {section[0]} context: {ctx}"
+    if len(section[1:]) > 0:
+        ctx = " \\n ".join(section[1:])
+        txt = f"title: {section[0]} context: \\n {ctx}"
+    else:
+        txt = f"title: {section[0]} context:"
+
     encodings = tokenizer(txt, return_tensors="pt", padding='max_length', truncation=True, max_length=max_length)
     list_sent_idx = get_idx_lines(encodings, sent_sep_encoding)
     return tokenizer.decode(encodings.input_ids[0], skip_special_tokens=True), list_sent_idx
@@ -103,13 +107,13 @@ if __name__ == "__main__":
     add_html_tags2tokenizer(tokenizer)
     sent_sep_encoding = tokenizer.get_added_vocab()['\\n']
     
-    documents_path = '../data/documents.json'
+    documents_path = '/home/puerto/projects/FiD_Graph/FiD/data/documents.json'
     print(f"Loading documents from {documents_path}")
     with open(documents_path) as f:
         documents = json.load(f)
     url2doc = {d['url']: d for i, d in enumerate(documents)}
     
-    training_path = '../data/train.json'
+    training_path = '/home/puerto/projects/FiD_Graph/FiD/data/train.json'
     print(f"Loading training data from {training_path}")
     with open(training_path) as f:
         train = json.load(f)
