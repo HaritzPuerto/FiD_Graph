@@ -29,7 +29,9 @@ class GraphBuilder():
         stack = deque()
         for sec_idx, section in enumerate(list_ctxs):
             root_node = self.current_node(section['title'])
+            sent_idx2node = {0: {"node_type": root_node, "node_idx": nodes[root_node]}}
             nodes[root_node] += 1
+            
             encoding = self.tokenizer(section['text'], return_tensors="pt", padding='max_length', truncation=True, max_length=self.max_length)
             input_ids = encoding.input_ids[0]
             list_attention_masks.append(encoding.attention_mask[0])
@@ -37,14 +39,15 @@ class GraphBuilder():
                 input_ids[-1] = 1 
                 # replace the last pad token by the end of sequence token. This is actually a bug in the tokenizer.
                 # The tokenizer should not add a pad token at the end of the sequence. It should add the end of sequence token. (i.e., 1 = </s>)
-            txt_splitted = section['text'].split("context: ")
+            
+            txt_splitted = section['text'].split("context: \\n")
             if len(txt_splitted) > 1:
                 # if there is context
                 list_html_lines_ctx = txt_splitted[1].split('\\n')
             else:
                 list_html_lines_ctx = []
-            sent_idx2node = {}
-            self.recursive_dom_tree_parsing(0, list_html_lines_ctx, [root_node], [section['title']], None, nodes, edges, sent_idx2node)
+            
+            self.recursive_dom_tree_parsing(1, list_html_lines_ctx, [root_node], [section['title']], None, nodes, edges, sent_idx2node)
             
             
             # add hierarchical edges
@@ -79,9 +82,12 @@ class GraphBuilder():
                         edges[etype].append((sent_idx2node[i]['node_idx'], t))
                         nodes['token'] += 1
                 # add edges to the last node
-                i = i + 1
                 list_pads_and_sep = (input_ids == self.id_pad).nonzero(as_tuple=True)[0].tolist()
                 list_pads_and_sep.extend((input_ids == self.id_sep).nonzero(as_tuple=True)[0].tolist())
+                i = i + 1
+                etype = sent_idx2node[i]['node_type'] + "_token"
+                if etype not in edges:
+                    edges[etype] = []
                 for token_idx in range(list_idx_nodes[-1], list_pads_and_sep[0]):
                     t = token_idx + sec_idx*self.max_length # to add the offset
                     edges[etype].append((sent_idx2node[i]['node_idx'], t))
@@ -306,7 +312,9 @@ class GraphBuilder():
 #         train_data = json.load(f)
     
 #     train_data = train_data[2170:2171]
-#     train_data[0]['ctxs'] = train_data[0]['ctxs'][:11]
+#     train_data[0]['ctxs'] = train_data[0]['ctxs'][11:]
+#     for sec in train_data[0]['ctxs']:
+#         sec['text'] = "context: \\n ".join(sec['text'].split('context: '))
 #     list_g = []
 #     list_input_ids = []
 #     list_attention_masks = []
