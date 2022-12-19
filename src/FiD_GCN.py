@@ -162,17 +162,20 @@ class EncoderWrapper(torch.nn.Module):
         attention_mask = attention_mask.view(bsz*self.n_passages, passage_length)
         outputs = self.encoder(input_ids, attention_mask, **kwargs)
         outputs = (outputs[0].view(bsz, self.n_passages*passage_length, -1), ) + outputs[1:]
-        original_shape = outputs[0].shape
-        self.create_node_embeddings(graph, outputs[0].view(-1, outputs[0].shape[-1]))
-        # to homogeneous graph
-        hg = dgl.to_homogeneous(graph, ndata=['h'])
-        hg = dgl.add_self_loop(hg)
-        # graph convolution
-        node_emb = self.gcn(hg, hg.ndata['h'])
-        # getting the token embeddings from the graph
-        token_node_idx = (hg.ndata[dgl.NTYPE] == graph.ntypes.index('token')).tolist()
-        token_emb = node_emb[token_node_idx]
-        outputs = (token_emb.view(original_shape), ) + outputs[1:]
+        if graph is not None:
+            original_shape = outputs[0].shape
+            self.create_node_embeddings(graph, outputs[0].view(-1, outputs[0].shape[-1]))
+            # to homogeneous graph
+            hg = dgl.to_homogeneous(graph, ndata=['h'])
+            hg = dgl.add_self_loop(hg)
+            # graph convolution
+            node_emb = self.gcn(hg, hg.ndata['h'])
+            # getting the token embeddings from the graph
+            token_node_idx = (hg.ndata[dgl.NTYPE] == graph.ntypes.index('token')).tolist()
+            token_emb = node_emb[token_node_idx]
+            outputs = (token_emb.view(original_shape), ) + outputs[1:]
+        else:
+            outputs = (outputs[0].view(bsz, self.n_passages*passage_length, -1), ) + outputs[1:]
         return outputs
     
     
