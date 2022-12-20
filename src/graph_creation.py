@@ -34,6 +34,7 @@ class GraphBuilder():
             
             encoding = self.tokenizer(section['text'], return_tensors="pt", padding='max_length', truncation=True, max_length=self.max_length)
             input_ids = encoding.input_ids[0]
+            list_input_ids.append(input_ids)
             list_attention_masks.append(encoding.attention_mask[0])
             if input_ids[-1] == 0:
                 input_ids[-1] = 1 
@@ -67,7 +68,6 @@ class GraphBuilder():
                 stack.append(root_node)
             
             # add token nodes
-            list_input_ids.append(input_ids)
             list_idx_nodes = [0]
             list_idx_nodes.extend((input_ids == self.id_slash_n).nonzero(as_tuple=True)[0].tolist())
             list_pads_occurences = (input_ids == self.id_pad).nonzero(as_tuple=True)[0].tolist()
