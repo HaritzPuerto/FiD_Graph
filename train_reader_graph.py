@@ -23,7 +23,6 @@ import os
 import json
 
 import logging
-logging.basicConfig(filename='fid_gcn.log', encoding='utf-8', level=logging.DEBUG)
 
 def process_prediction(pred_str):
     answers = []
@@ -169,6 +168,8 @@ if __name__ == "__main__":
     # logging = src.util.init_logging(
     #     checkpoint_path / 'run.log'
     # )
+    
+    logging.basicConfig(filename=os.path.join(checkpoint_path, 'run.log'), encoding='utf-8', level=logging.DEBUG)
     logging.info(f"logging started")
     model_name = 't5-' + opt.model_size
     model_class = src.FiD_GCN.FiDT5
@@ -176,7 +177,7 @@ if __name__ == "__main__":
     #load data
     tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
     # collator = src.data.Collator(opt.text_maxlength, tokenizer, answer_maxlength=opt.answer_maxlength)
-    collator = src.data.GraphCollator(512, tokenizer, answer_maxlength=opt.answer_maxlength)
+    collator = src.data.GraphCollator(opt.text_maxlength, tokenizer, answer_maxlength=opt.answer_maxlength)
 
     # use golbal rank and world size to split the eval set on multiple gpus
     train_examples = src.data.load_data(
