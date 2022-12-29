@@ -174,8 +174,7 @@ class EncoderWrapper(torch.nn.Module):
             token_node_idx = (hg.ndata[dgl.NTYPE] == graph.ntypes.index('token')).tolist()
             token_emb = node_emb[token_node_idx]
             outputs = (token_emb.view(original_shape), ) + outputs[1:]
-        else:
-            outputs = (outputs[0].view(bsz, self.n_passages*passage_length, -1), ) + outputs[1:]
+        
         return outputs
     
     
