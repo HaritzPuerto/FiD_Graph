@@ -17,7 +17,8 @@ class Dataset(torch.utils.data.Dataset):
                  n_context=None,
                  question_prefix='question:',
                  title_prefix='title:',
-                 passage_prefix='context:'):
+                 passage_prefix='context:',
+                 create_graphs=True):
         self.data = data
         self.n_context = n_context
         self.question_prefix = question_prefix
@@ -25,15 +26,7 @@ class Dataset(torch.utils.data.Dataset):
         self.passage_prefix = passage_prefix
         # self.sort_data()
         self.graph_builder = GraphBuilder()
-        
-        # self.list_graphs = []
-        # self.input_ids = []
-        # self.attention_masks = []
-        # for example in tqdm(self.data):
-        #     (g, input_ids, attention_masks) = self.graph_builder.create_graph(example['ctxs'])
-        #     self.list_graphs.append(g)
-        #     self.input_ids.append(input_ids)
-        #     self.attention_masks.append(attention_masks)
+        self.create_graphs = create_graphs
 
     def __len__(self):
         return len(self.data)
@@ -64,8 +57,25 @@ class Dataset(torch.utils.data.Dataset):
         else:
             passages, scores = None, None
 
-        ctxs = [{'title': ctx['title'], 'text': question+" \\n "+ctx['text']} for ctx in example['ctxs'][:self.n_context]]
-        (g, input_ids, attention_masks) = self.graph_builder.create_graph(ctxs)
+        if self.create_graphs:
+            ctxs = [{'title': ctx['title'], 'text': question+ctx['text']} for ctx in example['ctxs'][:self.n_context]]
+            list_input_ids = []
+            list_attention_masks = []
+            for section in ctxs:
+                encoding = self.graph_builder.tokenizer(section['text'], return_tensors="pt",
+                                        padding='max_length', truncation=True, 
+                                        max_length=self.graph_builder.max_length)
+                input_ids = encoding.input_ids[0]
+                list_input_ids.append(input_ids)
+                list_attention_masks.append(encoding.attention_mask[0].bool())
+            g = None
+            input_ids = torch.stack(list_input_ids)
+            attention_masks = torch.stack(list_attention_masks)
+            # (g, input_ids, attention_masks) = self.graph_builder.create_graph(ctxs)
+        else:
+            g = None
+            input_ids = None
+            attention_masks = None
 
         return {
             'index' : index,
