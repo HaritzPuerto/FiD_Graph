@@ -64,7 +64,8 @@ class Dataset(torch.utils.data.Dataset):
         else:
             passages, scores = None, None
 
-        (g, input_ids, attention_masks) = self.graph_builder.create_graph(example['ctxs'][:self.n_context])
+        ctxs = [{'title': ctx['title'], 'text': question+" \\n "+ctx['text']} for ctx in example['ctxs'][:self.n_context]]
+        (g, input_ids, attention_masks) = self.graph_builder.create_graph(ctxs)
 
         return {
             'index' : index,

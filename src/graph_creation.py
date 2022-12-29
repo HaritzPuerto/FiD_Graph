@@ -20,7 +20,7 @@ class GraphBuilder():
         '''
             - list_ctxs: [{'title': ..., 'text': ...}, ...]
         '''
-        nodes = {'h1': 0, 'h2': 0, 'h3': 0, 'h4': 0, 'p': 0, 'li': 0, 'tr': 0, 'token': 0}
+        nodes = {'h1': 0, 'h2': 0, 'h3': 0, 'h4': 0, 'p': 0, 'li': 0, 'tr': 0, 'token': 0, 'q': 0}
         edges = {}
         
         list_input_ids = []
@@ -29,8 +29,11 @@ class GraphBuilder():
         stack = deque()
         for sec_idx, section in enumerate(list_ctxs):
             root_node = self.current_node(section['title'])
-            sent_idx2node = {0: {"node_type": root_node, "node_idx": nodes[root_node]}}
+            sent_idx2node = {0: {"node_type": "q", "node_idx": nodes["q"]},
+                             1: {"node_type": root_node, "node_idx": nodes[root_node]}
+                            }
             nodes[root_node] += 1
+            nodes["q"] += 1
             
             encoding = self.tokenizer(section['text'], return_tensors="pt", padding='max_length', truncation=True, max_length=self.max_length)
             input_ids = encoding.input_ids[0]
@@ -48,7 +51,7 @@ class GraphBuilder():
             else:
                 list_html_lines_ctx = []
             
-            self.recursive_dom_tree_parsing(1, list_html_lines_ctx, [root_node], [section['title']], None, nodes, edges, sent_idx2node)
+            self.recursive_dom_tree_parsing(2, list_html_lines_ctx, [root_node], [section['title']], None, nodes, edges, sent_idx2node)
             
             
             # add hierarchical edges
