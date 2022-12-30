@@ -58,20 +58,7 @@ class Dataset(torch.utils.data.Dataset):
             passages, scores = None, None
 
         if self.create_graphs:
-            ctxs = [{'title': ctx['title'], 'text': question+ctx['text']} for ctx in example['ctxs'][:self.n_context]]
-            list_input_ids = []
-            list_attention_masks = []
-            for section in ctxs:
-                encoding = self.graph_builder.tokenizer(section['text'], return_tensors="pt",
-                                        padding='max_length', truncation=True, 
-                                        max_length=self.graph_builder.max_length)
-                input_ids = encoding.input_ids[0]
-                list_input_ids.append(input_ids)
-                list_attention_masks.append(encoding.attention_mask[0].bool())
-            g = None
-            input_ids = torch.stack(list_input_ids)
-            attention_masks = torch.stack(list_attention_masks)
-            # (g, input_ids, attention_masks) = self.graph_builder.create_graph(ctxs)
+            (g, input_ids, attention_masks) = self.graph_builder.create_graph(example['ctxs'][:self.n_context])
         else:
             g = None
             input_ids = None
