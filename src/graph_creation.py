@@ -15,6 +15,7 @@ class GraphBuilder():
         self.id_slash_n = self.tokenizer.get_added_vocab()['\\n']
         self.id_pad = self.tokenizer.get_vocab()['<pad>']
         self.id_sep = self.tokenizer.get_vocab()['</s>']
+        # T5 tokenizer works like this: tokens...</s><pad>...<pad> 
         
     def create_graph(self, list_ctxs):
         '''
@@ -39,11 +40,7 @@ class GraphBuilder():
             input_ids = encoding.input_ids[0]
             list_input_ids.append(input_ids)
             list_attention_masks.append(encoding.attention_mask[0])
-            if input_ids[-1] == 0:
-                input_ids[-1] = 1 
-                # replace the last pad token by the end of sequence token. This is actually a bug in the tokenizer.
-                # The tokenizer should not add a pad token at the end of the sequence. It should add the end of sequence token. (i.e., 1 = </s>)
-            
+
             txt_splitted = section['text'].split("context: \\n")
             if len(txt_splitted) > 1 and txt_splitted[1] != '':
                 # if there is context
@@ -74,8 +71,8 @@ class GraphBuilder():
             list_idx_nodes = [0]
             list_idx_nodes.extend((input_ids == self.id_slash_n).nonzero(as_tuple=True)[0].tolist())
             list_pads_occurences = (input_ids == self.id_pad).nonzero(as_tuple=True)[0].tolist()
-            list_pads_and_sep = (input_ids == self.id_pad).nonzero(as_tuple=True)[0].tolist()
-            list_pads_and_sep.extend((input_ids == self.id_sep).nonzero(as_tuple=True)[0].tolist())  
+            list_sep_and_pads = (input_ids == self.id_sep).nonzero(as_tuple=True)[0].tolist()
+            list_sep_and_pads.extend((input_ids == self.id_pad).nonzero(as_tuple=True)[0].tolist())  
             if len(sent_idx2node) > 0: # if there is at least 1 sentence in the section
                 i = 0
                 if len(list_idx_nodes) > 1:
@@ -92,7 +89,7 @@ class GraphBuilder():
                     etype = sent_idx2node[i]['node_type'] + "_token"
                     if etype not in edges:
                         edges[etype] = []
-                    for token_idx in range(list_idx_nodes[-1], list_pads_and_sep[0]):
+                    for token_idx in range(list_idx_nodes[-1], list_sep_and_pads[0]):
                         t = token_idx + sec_idx*self.max_length # to add the offset
                         edges[etype].append((sent_idx2node[i]['node_idx'], t))
                         nodes['token'] += 1
@@ -102,23 +99,26 @@ class GraphBuilder():
                     etype = sent_idx2node[i]['node_type'] + "_token"
                     if etype not in edges:
                         edges[etype] = []
-                    for token_idx in range(list_idx_nodes[-1], list_pads_and_sep[0]):
+                    for token_idx in range(list_idx_nodes[-1], list_sep_and_pads[0]):
                         t = token_idx + sec_idx*self.max_length # to add the offset
                         edges[etype].append((sent_idx2node[i]['node_idx'], t))
                         nodes['token'] += 1
             # add PAD tokens 
             # This will simplify the combination of section embeddings into the graph.
             # PAD nodes are connected to the root nodes (eg: h1)
-            if len(list_pads_occurences) > 0:
-                root_node = self.current_node(section['title'])
-                etype = f"{root_node}_token"
-                for token_idx in range(list_pads_occurences[0], len(input_ids)):
-                    if etype not in edges:
-                        edges[etype] = []
-                    t = token_idx + sec_idx*self.max_length # to add the offset
-                    # assert t == nodes['token']
-                    edges[etype].append((nodes[root_node]-1, t))
-                    nodes['token'] += 1     
+            root_node = self.current_node(section['title'])
+            etype = f"{root_node}_token"
+            for token_idx in range(list_sep_and_pads[0], len(input_ids)):
+                if etype not in edges:
+                    edges[etype] = []
+                t = token_idx + sec_idx*self.max_length # to add the offset
+                # assert t == nodes['token']
+                edges[etype].append((nodes[root_node]-1, t))
+                nodes['token'] += 1
+            
+            if (1+sec_idx) * 512 != nodes['token']:
+                print("ERROR: nodes['token'] != sec_idx * 512")
+               
             
         # add bidirectional edges
         reverse_edges = {}
