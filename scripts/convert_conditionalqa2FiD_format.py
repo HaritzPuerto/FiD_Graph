@@ -64,7 +64,7 @@ def truncate_section(tokenizer, question, section, max_length, sent_sep_encoding
         ctx = " \\n ".join(section[1:])
         txt = f"{question} \\n title: {section[0]} context: \\n {ctx}"
     else:
-        txt = f"title: {section[0]} context:"
+        txt = f"{question} \\n title: {section[0]} context:"
 
     encodings = tokenizer(txt, return_tensors="pt", padding='max_length', truncation=True, max_length=max_length)
     list_sent_idx = get_idx_lines(encodings, sent_sep_encoding)
