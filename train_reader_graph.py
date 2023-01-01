@@ -23,6 +23,8 @@ import os
 import json
 
 import logging
+import neptune.new as neptune
+from neptune.new.integrations.python_logger import NeptuneHandler
 
 def process_prediction(pred_str):
     answers = []
@@ -35,8 +37,9 @@ def process_prediction(pred_str):
         answers.append([ans_txt, list_cond])
     return answers
 
-def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, collator, best_dev_f1, checkpoint_path):
-
+def train(model, optimizer, scheduler, train_dataset, eval_dataset, opt, collator, checkpoint_path, neptune_run):
+    step, best_dev_f1 = 0, 0.0
+    
     torch.manual_seed(opt.seed) #different seed for different sampling depending on global_rank
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(
@@ -64,6 +67,8 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
                     graph=graph.to('cuda')
                 )[0]
 
+                neptune_run["train/loss"].log(train_loss.item())
+                neptune_run["train/lr"].log(scheduler.get_lr()[0])
                 train_loss.backward()
 
                 if step % opt.accumulation_steps == 0:
@@ -76,6 +81,12 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
 
                 if step % opt.eval_freq == 0 and step > 0:
                     results, list_str_preds = evaluate(model, eval_dataset, tokenizer, collator, opt)
+                    # log to neptune
+                    for category, cat_results in results.items():
+                        for metric, value in cat_results.items():
+                            neptune_run[f"dev/{category}/{metric}"].log(round(value*100, 2))
+                    neptune_run["dev/preds"].log(list_str_preds)
+                    # check if we need to save the model
                     dev_f1 = results['total']['F1_with_conditions']
                     model.train()
                     if opt.is_main:
@@ -148,13 +159,11 @@ def evaluate(model, dataset, tokenizer, collator, opt):
     return results, list_str_preds
 
 if __name__ == "__main__":
-    print("Start main")
     options = Options()
     options.add_reader_options()
     options.add_optim_options()
     opt = options.parse()
     #opt = options.get_options(use_reader=True, use_optim=True)
-    print("Options parsed")
     torch.manual_seed(opt.seed)
     opt.is_main = True
     checkpoint_path = Path(opt.checkpoint_dir)/opt.name
@@ -170,7 +179,15 @@ if __name__ == "__main__":
     # )
     
     logging.basicConfig(filename=os.path.join(checkpoint_path, 'run.log'), encoding='utf-8', level=logging.DEBUG)
+    logger = logging.getLogger(__name__)
     logging.info(f"logging started")
+    
+    neptune_run = neptune.init(tags=["GCN", "adamw"])
+    logger.addHandler(NeptuneHandler(run=neptune_run))
+    
+    neptune_run["model/parameters"] = opt
+
+    
     model_name = 't5-' + opt.model_size
     model_class = src.FiD_GCN.FiDT5
 
@@ -212,11 +229,10 @@ if __name__ == "__main__":
         model,
         optimizer,
         scheduler,
-        step,
         train_dataset,
         eval_dataset,
         opt,
         collator,
-        best_dev_em,
-        checkpoint_path
+        checkpoint_path,
+        neptune_run
     )
