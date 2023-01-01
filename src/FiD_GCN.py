@@ -173,7 +173,8 @@ class EncoderWrapper(torch.nn.Module):
             # getting the token embeddings from the graph
             token_node_idx = (hg.ndata[dgl.NTYPE] == graph.ntypes.index('token')).tolist()
             token_emb = node_emb[token_node_idx]
-            outputs = (token_emb.view(original_shape), ) + outputs[1:]
+            new_tokens = token_emb.view(original_shape) + outputs[0]
+            outputs = (new_tokens, ) + outputs[1:]
         
         return outputs
     
@@ -182,7 +183,7 @@ class EncoderWrapper(torch.nn.Module):
     def create_node_embeddings(self, g, token_emb):
         g.nodes['token'].data['h'] = token_emb
 
-        ntypes = ['tr', 'li', 'p', 'h4', 'h3', 'h2', 'h1']
+        ntypes = ['q', 'tr', 'li', 'p', 'h4', 'h3', 'h2', 'h1']
         for ntype in ntypes:
             if ntype not in g.ntypes:
                 continue
@@ -196,7 +197,7 @@ class EncoderWrapper(torch.nn.Module):
                 # the average of the node will be the average of the average of the different types of children nodes
                 for etype in list_etypes_tonode:
                     src_type = etype.split('_')[0]
-                    if self.html_tag_comparison(ntype, src_type) == 1:
+                    if self.html_tag_comparison(ntype, src_type) == 1 or etype == 'token_q':
                         (src_nodes, _) = g.in_edges(ntype_node, etype=etype)
                         if src_nodes.shape[0] > 0:
                             emb = torch.mean(g.nodes[src_type].data['h'][src_nodes], dim=0)
