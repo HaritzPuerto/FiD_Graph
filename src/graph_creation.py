@@ -116,10 +116,6 @@ class GraphBuilder():
                 edges[etype].append((nodes[root_node]-1, t))
                 nodes['token'] += 1
             
-            if (1+sec_idx) * 512 != nodes['token']:
-                print("ERROR: nodes['token'] != sec_idx * 512")
-               
-            
         # add bidirectional edges
         reverse_edges = {}
         for etype in edges.keys():
