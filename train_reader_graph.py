@@ -52,10 +52,9 @@ def train(model, optimizer, scheduler, train_dataset, eval_dataset, opt, collato
     )
 
     loss, curr_loss = 0.0, 0.0
-    epoch = 1
+    epoch = 0
     model.train()
     while step < opt.total_steps:
-        epoch += 1
         for i, batch in enumerate(tqdm(train_dataloader)):
             step += 1
             (idx, labels, _, context_ids, context_mask, graph) = batch
@@ -68,7 +67,7 @@ def train(model, optimizer, scheduler, train_dataset, eval_dataset, opt, collato
                 )[0]
 
                 neptune_run["train/loss"].log(train_loss.item())
-                neptune_run["train/lr"].log(scheduler.get_lr()[0])
+                neptune_run["train/lr"].log(scheduler.get_last_lr())
                 train_loss.backward()
 
                 if step % opt.accumulation_steps == 0:
@@ -120,7 +119,36 @@ def train(model, optimizer, scheduler, train_dataset, eval_dataset, opt, collato
                 logging.error(f"ERROR IN TRAINING IDX {idx}")
                 logging.error(f"Graph: {graph}")
                 raise Exception(e)
-                
+        
+        epoch += 1
+        results, list_str_preds = evaluate(model, eval_dataset, tokenizer, collator, opt)
+        model.train()
+        # log to neptune
+        for category, cat_results in results.items():
+            for metric, value in cat_results.items():
+                neptune_run[f"epoch/dev/{category}/{metric}"].log(round(value*100, 2))
+        neptune_run["epoch/dev/preds"].log(list_str_preds)
+        # check if we need to save the model
+        dev_f1 = results['total']['F1_with_conditions']
+        
+        if dev_f1 > best_dev_f1:
+            best_dev_f1 = dev_f1
+            src.util.save(model, optimizer, scheduler, step, best_dev_f1,
+                    opt, checkpoint_path, 'best_dev')
+        log = f"{epoch} / {epoch} |"
+        log += f"train: {curr_loss/opt.eval_freq:.3f} |"
+        log += f"evaluation: {100*dev_f1:.2f} total F1 w/ cond. |"
+        log += f"lr: {scheduler.get_last_lr()[0]:.5f}"
+        logging.info(log)    
+        
+        curr_loss = 0.
+        path = os.path.join(checkpoint_path, "checkpoint")
+        epoch_path = os.path.join(path, f"epoch-{epoch}")
+        os.makedirs(epoch_path, exist_ok=True)
+        with open(epoch_path + "/predictions.txt", "w") as f:
+            json.dump(list_str_preds, f)
+        with open(epoch_path + "/results.json", "w") as f:
+            json.dump(results, f)   
 
 def evaluate(model, dataset, tokenizer, collator, opt):
     list_str_preds = []
@@ -182,7 +210,7 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
     logging.info(f"logging started")
     
-    neptune_run = neptune.init(tags=["GCN", "adamw"])
+    neptune_run = neptune.init_run(tags=opt.neptune_tags)
     logger.addHandler(NeptuneHandler(run=neptune_run))
     
     neptune_run["model/parameters"] = opt
