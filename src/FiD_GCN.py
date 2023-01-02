@@ -14,6 +14,76 @@ import numpy as np
 from dgl.nn import GraphConv
 import dgl
 
+
+
+class GATLayer(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super(GATLayer, self).__init__()
+        # equation (1)
+        self.fc = nn.Linear(in_dim, out_dim, bias=False)
+        # equation (2)
+        self.attn_fc = nn.Linear(2 * out_dim, 1, bias=False)
+    
+    def edge_attention(self, edges):
+        # edge UDF for equation (2)
+        z2 = torch.cat([edges.src['z'], edges.dst['z']], dim=1)
+        a = self.attn_fc(z2)
+        return {'e' : F.leaky_relu(a)}
+    
+    def message_func(self, edges):
+        # message UDF for equation (3) & (4)
+        return {'z' : edges.src['z'], 'e' : edges.data['e']}
+    
+    def reduce_func(self, nodes):
+        # reduce UDF for equation (3) & (4)
+        # equation (3)
+        alpha = F.softmax(nodes.mailbox['e'], dim=1)
+        # equation (4)
+        h = torch.sum(alpha * nodes.mailbox['z'], dim=1)
+        return {'h' : h}
+    
+    def forward(self, g, h):
+        # equation (1)
+        z = self.fc(h)
+        g.ndata['z'] = z
+        # equation (2)
+        g.apply_edges(self.edge_attention)
+        # equation (3) & (4)
+        g.update_all(self.message_func, self.reduce_func)
+        return g.ndata.pop('h')
+    
+class MultiHeadGATLayer(nn.Module):
+    def __init__(self, in_dim, out_dim, num_heads, merge='cat'):
+        super(MultiHeadGATLayer, self).__init__()
+        self.heads = nn.ModuleList()
+        for i in range(num_heads):
+            self.heads.append(GATLayer(in_dim, out_dim))
+        self.merge = merge
+    
+    def forward(self, g, h):
+        head_outs = [attn_head(g, h) for attn_head in self.heads]
+        if self.merge == 'cat':
+            # concat on the output feature dimension (dim=1)
+            return torch.cat(head_outs, dim=1)
+        else:
+            # merge using average
+            return torch.mean(torch.stack(head_outs))
+
+class GAT(nn.Module):
+    def __init__(self, in_dim, hidden_dim, out_dim, num_heads):
+        super(GAT, self).__init__()
+        self.layer1 = MultiHeadGATLayer(in_dim, hidden_dim, num_heads)
+        # Be aware that the input dimension is hidden_dim*num_heads since
+        #   multiple head outputs are concatenated together. Also, only
+        #   one attention head in the output layer.
+        self.layer2 = MultiHeadGATLayer(hidden_dim * num_heads, out_dim, 1)
+    
+    def forward(self, g, h):
+        h = self.layer1(g, h)
+        h = F.elu(h)
+        h = self.layer2(g, h)
+        return h
+
 class GCN(nn.Module):
     def __init__(self, in_feats, h_feats):
         super(GCN, self).__init__()
@@ -151,7 +221,11 @@ class EncoderWrapper(torch.nn.Module):
 
         self.encoder = encoder
         apply_checkpoint_wrapper(self.encoder, use_checkpoint)
-        self.gcn = GCN(encoder.config.d_model, encoder.config.d_model)
+        # self.gcn = GCN(encoder.config.d_model, encoder.config.d_model)
+        self.gnn = GAT(in_dim=encoder.config.d_model,
+                       hidden_dim=encoder.config.d_model,
+                       out_dim=encoder.config.d_model, 
+                       num_heads=2)
         
         
     def forward(self, input_ids=None, attention_mask=None, graph=None, **kwargs,):
@@ -169,10 +243,11 @@ class EncoderWrapper(torch.nn.Module):
             hg = dgl.to_homogeneous(graph, ndata=['h'])
             hg = dgl.add_self_loop(hg)
             # graph convolution
-            node_emb = self.gcn(hg, hg.ndata['h'])
+            node_emb = self.gnn(hg, hg.ndata['h'])
             # getting the token embeddings from the graph
             token_node_idx = (hg.ndata[dgl.NTYPE] == graph.ntypes.index('token')).tolist()
             token_emb = node_emb[token_node_idx]
+            # adding the token embeddings to the original token embeddings
             new_tokens = token_emb.view(original_shape) + outputs[0]
             outputs = (new_tokens, ) + outputs[1:]
         
