@@ -97,7 +97,7 @@ def format_data(tokenizer, data, url2doc, sent_sep_encoding, max_length: 512, pr
                 'id': x['id'],
                 'question': question,
                 'target': get_label(x),
-                'answers': [''],
+                'answers': x['answers'],
                 'full_ctxs': [{'title': s[0], "text": s[1:]} for s in list_sections],
                 'ctxs': truncated_sec,
                 'list_sent_idx': list_sent_idx
