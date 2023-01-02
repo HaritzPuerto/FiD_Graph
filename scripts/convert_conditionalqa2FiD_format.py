@@ -48,6 +48,9 @@ def get_label(x):
                 label += " "
         else:
             label += "NA"
+        label += ". "
+    # remove last space
+    label = label[:-1]
     return label
 
 def get_idx_lines(encodings, sent_sep_encoding):
